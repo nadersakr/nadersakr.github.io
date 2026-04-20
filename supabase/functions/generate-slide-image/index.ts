@@ -5,26 +5,257 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
-async function urlToDataUrl(url: string): Promise<string | null> {
-  try {
-    const res = await fetch(url);
-    if (!res.ok) {
-      console.error("Failed to fetch image", url, res.status);
-      return null;
-    }
-    const contentType = res.headers.get("content-type") || "image/png";
-    const buf = new Uint8Array(await res.arrayBuffer());
-    let binary = "";
-    const chunk = 0x8000;
-    for (let i = 0; i < buf.length; i += chunk) {
-      binary += String.fromCharCode(...buf.subarray(i, i + chunk));
-    }
-    const b64 = btoa(binary);
-    return `data:${contentType};base64,${b64}`;
-  } catch (e) {
-    console.error("urlToDataUrl error", url, e);
-    return null;
+class WaveSpeedApiError extends Error {
+  status: number;
+  details: string;
+
+  constructor(message: string, status: number, details = "") {
+    super(message);
+    this.name = "WaveSpeedApiError";
+    this.status = status;
+    this.details = details;
   }
+}
+
+function parsePositiveIntEnv(name: string, fallback: number): number {
+  const raw = Deno.env.get(name);
+  if (!raw) return fallback;
+  const parsed = Number(raw);
+  if (!Number.isFinite(parsed) || parsed <= 0) return fallback;
+  return Math.floor(parsed);
+}
+
+function normalizeModelId(modelId: string): string {
+  return modelId.trim().replace(/^\/+|\/+$/g, "");
+}
+
+function pickFirstString(value: unknown): string | null {
+  if (typeof value === "string") {
+    const trimmed = value.trim();
+    return trimmed.length ? trimmed : null;
+  }
+
+  if (Array.isArray(value)) {
+    for (const item of value) {
+      const picked = pickFirstString(item);
+      if (picked) return picked;
+    }
+  }
+
+  return null;
+}
+
+function extractPredictionPayload(payload: unknown): Record<string, unknown> {
+  if (!payload || typeof payload !== "object" || Array.isArray(payload)) return {};
+  const record = payload as Record<string, unknown>;
+  const nested = record.data;
+  if (nested && typeof nested === "object" && !Array.isArray(nested)) {
+    return nested as Record<string, unknown>;
+  }
+  return record;
+}
+
+function extractChoiceContent(payload: Record<string, unknown>): string | null {
+  const choices = payload.choices;
+  if (!Array.isArray(choices) || choices.length === 0) return null;
+
+  const firstChoice = choices[0];
+  if (!firstChoice || typeof firstChoice !== "object" || Array.isArray(firstChoice)) return null;
+
+  const message = (firstChoice as Record<string, unknown>).message;
+  if (!message || typeof message !== "object" || Array.isArray(message)) return null;
+
+  const content = (message as Record<string, unknown>).content;
+  return pickFirstString(content);
+}
+
+async function readResponseDetails(response: Response): Promise<string> {
+  const raw = await response.text();
+  if (!raw) return "";
+
+  try {
+    const parsed = JSON.parse(raw) as Record<string, unknown>;
+    const parts = [
+      typeof parsed.message === "string" ? parsed.message : "",
+      typeof parsed.error === "string" ? parsed.error : "",
+      raw,
+    ].filter(Boolean);
+    return parts.join(" | ");
+  } catch {
+    return raw;
+  }
+}
+
+async function sleep(ms: number): Promise<void> {
+  await new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+async function runWaveSpeedPrediction({
+  apiKey,
+  modelId,
+  input,
+  timeoutMs,
+  pollIntervalMs,
+}: {
+  apiKey: string;
+  modelId: string;
+  input: Record<string, unknown>;
+  timeoutMs: number;
+  pollIntervalMs: number;
+}): Promise<Record<string, unknown>> {
+  const normalizedModel = normalizeModelId(modelId);
+  if (!normalizedModel) throw new Error("WaveSpeed model id is missing");
+
+  const submitRes = await fetch(`https://api.wavespeed.ai/api/v3/${normalizedModel}`, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${apiKey}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(input),
+  });
+
+  if (!submitRes.ok) {
+    const details = await readResponseDetails(submitRes);
+    throw new WaveSpeedApiError("WaveSpeed request failed", submitRes.status, details);
+  }
+
+  const submitPayload = extractPredictionPayload(await submitRes.json());
+  const submitStatus = String(submitPayload.status || "").toLowerCase();
+  const taskId = typeof submitPayload.id === "string" ? submitPayload.id : "";
+
+  if (submitStatus === "completed") {
+    return submitPayload;
+  }
+
+  if (submitStatus === "failed" || submitStatus === "canceled") {
+    const errorText = pickFirstString(submitPayload.error) || "Unknown WaveSpeed error";
+    throw new Error(`WaveSpeed request failed: ${errorText}`);
+  }
+
+  if (!taskId) {
+    return submitPayload;
+  }
+
+  const resultUrl = `https://api.wavespeed.ai/api/v3/predictions/${encodeURIComponent(taskId)}/result`;
+  const deadline = Date.now() + timeoutMs;
+
+  while (Date.now() < deadline) {
+    await sleep(pollIntervalMs);
+
+    const pollRes = await fetch(resultUrl, {
+      method: "GET",
+      headers: { Authorization: `Bearer ${apiKey}` },
+    });
+
+    if (!pollRes.ok) {
+      if ([404, 409, 425, 500, 502, 503, 504].includes(pollRes.status)) {
+        continue;
+      }
+      const details = await readResponseDetails(pollRes);
+      throw new WaveSpeedApiError("WaveSpeed polling failed", pollRes.status, details);
+    }
+
+    const pollPayload = extractPredictionPayload(await pollRes.json());
+    const pollStatus = String(pollPayload.status || "").toLowerCase();
+
+    if (pollStatus === "completed") {
+      return pollPayload;
+    }
+
+    if (pollStatus === "failed" || pollStatus === "canceled") {
+      const errorText = pickFirstString(pollPayload.error) || "Unknown WaveSpeed error";
+      throw new Error(`WaveSpeed request failed: ${errorText}`);
+    }
+
+    if (!pollStatus) {
+      const fallbackOutput = pickFirstString(
+        pollPayload.outputs ?? pollPayload.output ?? pollPayload.image_url ?? pollPayload.image ?? pollPayload.text ?? pollPayload.result,
+      );
+      if (fallbackOutput) {
+        return pollPayload;
+      }
+    }
+  }
+
+  throw new Error(`WaveSpeed request timed out after ${timeoutMs}ms`);
+}
+
+function extractScriptText(prediction: Record<string, unknown>): string {
+  const candidates: string[] = [];
+  const pushCandidate = (value: unknown) => {
+    const picked = pickFirstString(value);
+    if (picked) candidates.push(picked);
+  };
+
+  pushCandidate(prediction.text);
+  pushCandidate(prediction.output_text);
+  pushCandidate(prediction.response);
+  pushCandidate(prediction.result);
+  pushCandidate(extractChoiceContent(prediction));
+  pushCandidate(prediction.outputs);
+  pushCandidate(prediction.output);
+
+  const script = candidates.find((candidate) => {
+    const normalized = candidate.trim();
+    return normalized.length > 0 && !/^https?:\/\//i.test(normalized) && !normalized.startsWith("data:");
+  });
+
+  if (!script) throw new Error("WaveSpeed did not return script text");
+  return script.trim().replace(/^["']|["']$/g, "");
+}
+
+function extractImageSource(prediction: Record<string, unknown>): string {
+  const candidates: string[] = [];
+  const pushCandidate = (value: unknown) => {
+    const picked = pickFirstString(value);
+    if (picked) candidates.push(picked);
+  };
+
+  pushCandidate(prediction.image_url);
+  pushCandidate(prediction.image);
+  pushCandidate(prediction.output);
+  pushCandidate(prediction.outputs);
+
+  const imageSource = candidates.find((candidate) => {
+    return /^https?:\/\//i.test(candidate) || candidate.startsWith("data:image/");
+  });
+
+  if (!imageSource) {
+    throw new Error("WaveSpeed did not return an image URL");
+  }
+
+  return imageSource;
+}
+
+async function downloadGeneratedImage(source: string): Promise<{ bytes: Uint8Array; contentType: string }> {
+  if (source.startsWith("data:image/")) {
+    const match = source.match(/^data:([^;,]+);base64,(.*)$/);
+    if (!match) throw new Error("Invalid image data URL from WaveSpeed");
+
+    const contentType = match[1] || "image/png";
+    const base64 = match[2].replace(/\s+/g, "");
+    const bytes = Uint8Array.from(atob(base64), (c) => c.charCodeAt(0));
+    return { bytes, contentType };
+  }
+
+  const res = await fetch(source);
+  if (!res.ok) {
+    throw new Error(`Failed to download generated image: ${res.status} ${res.statusText}`);
+  }
+
+  return {
+    bytes: new Uint8Array(await res.arrayBuffer()),
+    contentType: res.headers.get("content-type") || "image/png",
+  };
+}
+
+function extensionFromContentType(contentType: string): string {
+  const normalized = contentType.toLowerCase();
+  if (normalized.includes("jpeg") || normalized.includes("jpg")) return "jpg";
+  if (normalized.includes("webp")) return "webp";
+  if (normalized.includes("png")) return "png";
+  return "png";
 }
 
 // ─── PROMPT BUILDERS ────────────────────────────────────────────────────────
@@ -211,14 +442,22 @@ Return ONLY the narration line. No quotes, no explanation.`;
 
 // ─── MAIN HANDLER ────────────────────────────────────────────────────────────
 
-Deno.serve(async (req) => {
+Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
   try {
-    const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
+    const WAVESPEED_API_KEY = Deno.env.get("WAVESPEED_API_KEY");
+    const WAVESPEED_SCRIPT_MODEL = Deno.env.get("WAVESPEED_SCRIPT_MODEL")?.trim() || "google/gemini-2.5-flash";
+    const WAVESPEED_IMAGE_MODEL = Deno.env.get("WAVESPEED_IMAGE_MODEL")?.trim() || "wavespeed-ai/z-image/turbo";
+    const WAVESPEED_FEATURE_IMAGE_MODEL = Deno.env.get("WAVESPEED_FEATURE_IMAGE_MODEL")?.trim() || WAVESPEED_IMAGE_MODEL;
+    const WAVESPEED_IMAGE_SOURCE_FIELD = Deno.env.get("WAVESPEED_IMAGE_SOURCE_FIELD")?.trim() || "";
+    const WAVESPEED_TIMEOUT_MS = parsePositiveIntEnv("WAVESPEED_TIMEOUT_MS", 300000);
+    const WAVESPEED_POLL_INTERVAL_MS = parsePositiveIntEnv("WAVESPEED_POLL_INTERVAL_MS", 1500);
+
     const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
     const SERVICE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-    if (!LOVABLE_API_KEY) throw new Error("LOVABLE_API_KEY missing");
+
+    if (!WAVESPEED_API_KEY) throw new Error("WAVESPEED_API_KEY missing");
 
     const authHeader = req.headers.get("Authorization") ?? "";
     const userClient = createClient(SUPABASE_URL, Deno.env.get("SUPABASE_ANON_KEY")!, {
@@ -240,10 +479,11 @@ Deno.serve(async (req) => {
     let imagePrompt = "";
     const referenceImages: string[] = [];
 
-    // Always load the logo first so it's index [0] in referenceImages
-    if (project.logo_url) {
-      const logoData = await urlToDataUrl(project.logo_url);
-      if (logoData) referenceImages.push(logoData);
+    const hasLogo = typeof project.logo_url === "string" && project.logo_url.trim().length > 0;
+
+    // Keep logo first in order, so prompts that depend on ordering remain accurate.
+    if (hasLogo) {
+      referenceImages.push(project.logo_url.trim());
     }
 
     if (type === "intro") {
@@ -251,7 +491,7 @@ Deno.serve(async (req) => {
       imagePrompt = buildIntroImagePrompt(
         arText, ar, project.name,
         project.primary_color, project.secondary_color,
-        !!project.logo_url
+        hasLogo
       );
     } else if (type === "feature" && featureId) {
       const { data: feature } = await admin
@@ -261,24 +501,34 @@ Deno.serve(async (req) => {
         .single();
       if (!feature) throw new Error("Feature not found");
 
-      const shots = (feature.feature_screenshots || []).sort((a: any, b: any) => a.sort_order - b.sort_order);
-      for (const s of shots) {
-        const d = await urlToDataUrl(s.screenshot_url);
-        if (d) referenceImages.push(d);
+      const rawShots = Array.isArray(feature.feature_screenshots)
+        ? feature.feature_screenshots as Array<{ screenshot_url: unknown; sort_order: unknown }>
+        : [];
+
+      const shots = [...rawShots].sort((a, b) => {
+        const left = typeof a.sort_order === "number" ? a.sort_order : 0;
+        const right = typeof b.sort_order === "number" ? b.sort_order : 0;
+        return left - right;
+      });
+
+      for (const shot of shots) {
+        if (typeof shot.screenshot_url === "string" && shot.screenshot_url.trim()) {
+          referenceImages.push(shot.screenshot_url.trim());
+        }
       }
 
       scriptPrompt = buildFeatureScriptPrompt(feature.title, feature.description);
       imagePrompt = buildFeatureImagePrompt(
         arText, ar, feature.title, feature.description,
         project.primary_color, project.secondary_color,
-        !!project.logo_url, shots.length
+        hasLogo, shots.length
       );
     } else if (type === "outro") {
       scriptPrompt = buildOutroScriptPrompt(project.name, project.outro_text);
       imagePrompt = buildOutroImagePrompt(
         arText, ar, project.name, project.outro_text,
         project.primary_color, project.secondary_color,
-        !!project.logo_url,
+        hasLogo,
         !!project.show_google_play,
         !!project.show_app_store
       );
@@ -286,48 +536,91 @@ Deno.serve(async (req) => {
       throw new Error("Invalid slide type");
     }
 
-    // 1) Script generation
-    const scriptRes = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
-      method: "POST",
-      headers: { Authorization: `Bearer ${LOVABLE_API_KEY}`, "Content-Type": "application/json" },
-      body: JSON.stringify({
-        model: "google/gemini-2.5-flash",
-        messages: [{ role: "user", content: scriptPrompt }],
-      }),
+    // 1) Script generation via WaveSpeed Any LLM
+    const scriptPrediction = await runWaveSpeedPrediction({
+      apiKey: WAVESPEED_API_KEY,
+      modelId: "wavespeed-ai/any-llm",
+      input: {
+        prompt: scriptPrompt,
+        model: WAVESPEED_SCRIPT_MODEL,
+        priority: "latency",
+        temperature: 0.7,
+        max_tokens: 80,
+        enable_sync_mode: false,
+      },
+      timeoutMs: WAVESPEED_TIMEOUT_MS,
+      pollIntervalMs: WAVESPEED_POLL_INTERVAL_MS,
     });
-    if (scriptRes.status === 429) return new Response(JSON.stringify({ error: "Rate limit, try again in a moment." }), { status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" } });
-    if (scriptRes.status === 402) return new Response(JSON.stringify({ error: "AI credits exhausted. Add credits to continue." }), { status: 402, headers: { ...corsHeaders, "Content-Type": "application/json" } });
-    if (!scriptRes.ok) throw new Error(`Script gen failed: ${await scriptRes.text()}`);
-    const scriptJson = await scriptRes.json();
-    const script = (scriptJson.choices?.[0]?.message?.content || "").trim().replace(/^["']|["']$/g, "");
+    const script = extractScriptText(scriptPrediction);
 
-    // 2) Image generation — multimodal with reference images
-    const userContent: any[] = [{ type: "text", text: imagePrompt }];
-    for (const dataUrl of referenceImages) {
-      userContent.push({ type: "image_url", image_url: { url: dataUrl } });
+    // 2) Image generation via WaveSpeed model (feature model falls back to base model)
+    const preferredImageModel = type === "feature" ? WAVESPEED_FEATURE_IMAGE_MODEL : WAVESPEED_IMAGE_MODEL;
+    const fallbackImageModel = WAVESPEED_IMAGE_MODEL;
+
+    const imageInput: Record<string, unknown> = {
+      prompt: imagePrompt,
+      size: ar,
+      enable_sync_mode: false,
+    };
+
+    if (referenceImages.length > 0) {
+      const sourceImage = type === "feature" && hasLogo && referenceImages.length > 1
+        ? referenceImages[1]
+        : referenceImages[0];
+
+      if (WAVESPEED_IMAGE_SOURCE_FIELD) {
+        imageInput[WAVESPEED_IMAGE_SOURCE_FIELD] = WAVESPEED_IMAGE_SOURCE_FIELD.toLowerCase().includes("images")
+          ? referenceImages
+          : sourceImage;
+      } else {
+        imageInput.images = referenceImages;
+      }
     }
 
-    const imgRes = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
-      method: "POST",
-      headers: { Authorization: `Bearer ${LOVABLE_API_KEY}`, "Content-Type": "application/json" },
-      body: JSON.stringify({
-        model: "google/gemini-2.5-flash-image",
-        messages: [{ role: "user", content: userContent }],
-        modalities: ["image", "text"],
-      }),
-    });
-    if (imgRes.status === 429) return new Response(JSON.stringify({ error: "Rate limit, try again in a moment." }), { status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" } });
-    if (imgRes.status === 402) return new Response(JSON.stringify({ error: "AI credits exhausted. Add credits to continue." }), { status: 402, headers: { ...corsHeaders, "Content-Type": "application/json" } });
-    if (!imgRes.ok) throw new Error(`Image gen failed: ${await imgRes.text()}`);
-    const imgJson = await imgRes.json();
-    const dataUrl: string | undefined = imgJson.choices?.[0]?.message?.images?.[0]?.image_url?.url;
-    if (!dataUrl) throw new Error("No image returned");
+    const canFallbackToBaseModel = type === "feature" && preferredImageModel !== fallbackImageModel;
 
-    const base64 = dataUrl.split(",")[1];
-    const bytes = Uint8Array.from(atob(base64), (c) => c.charCodeAt(0));
-    const path = `${user.id}/${projectId}/${type}-${featureId || "main"}-${Date.now()}.png`;
+    let imagePrediction: Record<string, unknown>;
+    try {
+      imagePrediction = await runWaveSpeedPrediction({
+        apiKey: WAVESPEED_API_KEY,
+        modelId: preferredImageModel,
+        input: imageInput,
+        timeoutMs: WAVESPEED_TIMEOUT_MS,
+        pollIntervalMs: WAVESPEED_POLL_INTERVAL_MS,
+      });
+    } catch (error) {
+      if (!canFallbackToBaseModel) throw error;
+      console.warn("Feature image model failed; retrying with default image model", error);
+      imagePrediction = await runWaveSpeedPrediction({
+        apiKey: WAVESPEED_API_KEY,
+        modelId: fallbackImageModel,
+        input: imageInput,
+        timeoutMs: WAVESPEED_TIMEOUT_MS,
+        pollIntervalMs: WAVESPEED_POLL_INTERVAL_MS,
+      });
+    }
+
+    let generatedImageSource: string;
+    try {
+      generatedImageSource = extractImageSource(imagePrediction);
+    } catch (error) {
+      if (!canFallbackToBaseModel) throw error;
+      console.warn("Feature image response was missing output; retrying with default image model", error);
+      imagePrediction = await runWaveSpeedPrediction({
+        apiKey: WAVESPEED_API_KEY,
+        modelId: fallbackImageModel,
+        input: imageInput,
+        timeoutMs: WAVESPEED_TIMEOUT_MS,
+        pollIntervalMs: WAVESPEED_POLL_INTERVAL_MS,
+      });
+      generatedImageSource = extractImageSource(imagePrediction);
+    }
+    const { bytes, contentType } = await downloadGeneratedImage(generatedImageSource);
+    const extension = extensionFromContentType(contentType);
+    const path = `${user.id}/${projectId}/${type}-${featureId || "main"}-${Date.now()}.${extension}`;
+
     const { error: upErr } = await admin.storage.from("generated-slides").upload(path, bytes, {
-      contentType: "image/png",
+      contentType,
       upsert: true,
     });
     if (upErr) throw upErr;
@@ -354,6 +647,30 @@ Deno.serve(async (req) => {
     });
   } catch (e) {
     console.error("generate-slide-image error", e);
+
+    if (e instanceof WaveSpeedApiError) {
+      if (e.status === 429) {
+        return new Response(JSON.stringify({ error: "WaveSpeed rate limit reached. Try again in a moment." }), {
+          status: 429,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
+      if (e.status === 402) {
+        return new Response(JSON.stringify({ error: "WaveSpeed credits exhausted. Add credits to continue." }), {
+          status: 402,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
+      if (e.status === 401 || e.status === 403) {
+        return new Response(JSON.stringify({ error: "WaveSpeed authentication failed. Check WAVESPEED_API_KEY." }), {
+          status: 500,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+    }
+
     return new Response(JSON.stringify({ error: e instanceof Error ? e.message : String(e) }), { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } });
   }
 });

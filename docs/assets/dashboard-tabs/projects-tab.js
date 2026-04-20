@@ -60,7 +60,7 @@ export function renderProjectsTab({
                         display: "inline-flex",
                         alignItems: "center",
                         gap: 8,
-                        background: TOKEN.blue,
+                        background: TOKEN.primary_color,
                         color: "#fff",
                         padding: "10px 22px",
                         borderRadius: 10,
