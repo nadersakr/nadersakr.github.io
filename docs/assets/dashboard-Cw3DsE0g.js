@@ -60,7 +60,13 @@ const m = j("message-circle", _msg);
 
 const _clipboard = [
   ["rect", { x: "9", y: "2", width: "6", height: "4", rx: "1", key: "clip-1" }],
-  ["path", { d: "M9 4H7a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V6a2 2 0 0 0-2-2h-2", key: "clip-2" }],
+  [
+    "path",
+    {
+      d: "M9 4H7a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V6a2 2 0 0 0-2-2h-2",
+      key: "clip-2",
+    },
+  ],
   ["path", { d: "M9 12h6", key: "clip-3" }],
   ["path", { d: "M9 16h6", key: "clip-4" }],
 ];
@@ -86,26 +92,26 @@ const B = j("upload-cloud", _uploadCloud);
 
 const NAV_ITEMS = [
   { key: "projects", label: "Projects", icon: b },
-  { key: "assets",   label: "Assets",   icon: y },
+  { key: "assets", label: "Assets", icon: y },
   { key: "discover", label: "Discover", icon: h },
 ];
 
 /* ─── Design tokens (inline) ─────────────────────────────────────────────── */
 
 const TOKEN = {
-  navy:        "#0f1e45",
-  blue:        "#1d3d8b",
-  blueMid:     "#2952b3",
-  blueLight:   "#4f72d4",
-  bluePale:    "#eef2fc",
-  blueGhost:   "#f0f4ff",
-  white:       "#ffffff",
-  surface:     "#f5f8fd",
-  border:      "#e4e9f5",
+  navy: "#0f1e45",
+  blue: "#1d3d8b",
+  blueMid: "#2952b3",
+  blueLight: "#4f72d4",
+  bluePale: "#eef2fc",
+  blueGhost: "#f0f4ff",
+  white: "#ffffff",
+  surface: "#f5f8fd",
+  border: "#e4e9f5",
   borderHover: "#c7d4f0",
-  textPrimary:   "#0d1832",
+  textPrimary: "#0d1832",
   textSecondary: "#5a6887",
-  textMuted:     "#9ba8c4",
+  textMuted: "#9ba8c4",
   radiusSm: 8,
   radiusMd: 12,
   radiusLg: 16,
@@ -113,9 +119,9 @@ const TOKEN = {
 };
 
 const STATUS_STYLE = {
-  completed:   { bg: "#ecfdf5", color: "#059669", label: "Completed"   },
+  completed: { bg: "#ecfdf5", color: "#059669", label: "Completed" },
   in_progress: { bg: "#fffbeb", color: "#d97706", label: "In Progress" },
-  draft:       { bg: "#f5f3ff", color: "#7c3aed", label: "Draft"       },
+  draft: { bg: "#f5f3ff", color: "#7c3aed", label: "Draft" },
 };
 
 /* ─── Helpers ─────────────────────────────────────────────────────────────── */
@@ -158,7 +164,12 @@ function formatBytes(bytes) {
 /** Gradient avatar initials — used when no photo URL is available */
 function InitialsAvatar({ name, size = 40 }) {
   const initials = name
-    ? name.split(" ").map((w) => w[0]).join("").slice(0, 2).toUpperCase()
+    ? name
+        .split(" ")
+        .map((w) => w[0])
+        .join("")
+        .slice(0, 2)
+        .toUpperCase()
     : "U";
   return e.jsx("div", {
     style: {
@@ -207,7 +218,12 @@ function ProjectCard({ project, onClick }) {
     },
     children: [
       e.jsxs("div", {
-        style: { display: "flex", alignItems: "flex-start", justifyContent: "space-between", marginBottom: 14 },
+        style: {
+          display: "flex",
+          alignItems: "flex-start",
+          justifyContent: "space-between",
+          marginBottom: 14,
+        },
         children: [
           e.jsx("div", {
             style: {
@@ -282,17 +298,17 @@ export function component() {
   const navigate = C();
 
   /* state */
-  const [projects,    setProjects]    = a.useState([]);
-  const [credits,     setCredits]     = a.useState(0);
+  const [projects, setProjects] = a.useState([]);
+  const [credits, setCredits] = a.useState(0);
   const [dataLoading, setDataLoading] = a.useState(true);
-  const [creating,    setCreating]    = a.useState(false);
-  const [activeTab,   setActiveTab]   = a.useState("projects");
-  const [assetFiles,  setAssetFiles]  = a.useState([]);
-  const [menuOpen,    setMenuOpen]    = a.useState(false);
+  const [creating, setCreating] = a.useState(false);
+  const [activeTab, setActiveTab] = a.useState("projects");
+  const [assetFiles, setAssetFiles] = a.useState([]);
+  const [menuOpen, setMenuOpen] = a.useState(false);
 
-  const menuRef    = a.useRef(null);
-  const profile    = extractProfile(user);
-  const avatarFb   = fallbackAvatar(profile.name, profile.email);
+  const menuRef = a.useRef(null);
+  const profile = extractProfile(user);
+  const avatarFb = fallbackAvatar(profile.name, profile.email);
   const [avatarSrc, setAvatarSrc] = a.useState(profile.avatar || avatarFb);
 
   /* redirect if logged out */
@@ -435,7 +451,9 @@ export function component() {
               opacity: creating ? 0.7 : 1,
             },
             children: [
-              creating ? e.jsx(i, { size: 16, label: "Creating project" }) : e.jsx(g, { className: "h-4 w-4" }),
+              creating
+                ? e.jsx(i, { size: 16, label: "Creating project" })
+                : e.jsx(g, { className: "h-4 w-4" }),
               creating ? "Creating…" : "Create First Project",
             ],
           }),
@@ -449,9 +467,7 @@ export function component() {
         gridTemplateColumns: "repeat(auto-fill, minmax(240px, 1fr))",
         gap: 16,
       },
-      children: projects.map((proj) =>
-        e.jsx(ProjectCard, { project: proj }, proj.id)
-      ),
+      children: projects.map((proj) => e.jsx(ProjectCard, { project: proj }, proj.id)),
     });
   };
 
@@ -492,7 +508,12 @@ export function component() {
                 e.jsxs("div", {
                   children: [
                     e.jsx("p", {
-                      style: { fontSize: 15, fontWeight: 600, color: TOKEN.textPrimary, marginBottom: 4 },
+                      style: {
+                        fontSize: 15,
+                        fontWeight: 600,
+                        color: TOKEN.textPrimary,
+                        marginBottom: 4,
+                      },
                       children: "Drop files here or browse",
                     }),
                     e.jsx("p", {
@@ -531,27 +552,31 @@ export function component() {
               e.jsx("div", {
                 style: { marginTop: 20, display: "flex", flexDirection: "column", gap: 8 },
                 children: assetFiles.map((file) =>
-                  e.jsxs("div", {
-                    style: {
-                      display: "flex",
-                      alignItems: "center",
-                      justifyContent: "space-between",
-                      padding: "10px 14px",
-                      borderRadius: 10,
-                      background: TOKEN.surface,
-                      border: `1px solid ${TOKEN.border}`,
+                  e.jsxs(
+                    "div",
+                    {
+                      style: {
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "space-between",
+                        padding: "10px 14px",
+                        borderRadius: 10,
+                        background: TOKEN.surface,
+                        border: `1px solid ${TOKEN.border}`,
+                      },
+                      children: [
+                        e.jsx("span", {
+                          style: { fontSize: 13, fontWeight: 500, color: TOKEN.textPrimary },
+                          children: file.name,
+                        }),
+                        e.jsx("span", {
+                          style: { fontSize: 12, color: TOKEN.textMuted },
+                          children: formatBytes(file.size),
+                        }),
+                      ],
                     },
-                    children: [
-                      e.jsx("span", {
-                        style: { fontSize: 13, fontWeight: 500, color: TOKEN.textPrimary },
-                        children: file.name,
-                      }),
-                      e.jsx("span", {
-                        style: { fontSize: 12, color: TOKEN.textMuted },
-                        children: formatBytes(file.size),
-                      }),
-                    ],
-                  }, `${file.name}-${file.size}`)
+                    `${file.name}-${file.size}`,
+                  ),
                 ),
               }),
           ],
@@ -603,14 +628,14 @@ export function component() {
 
   const tabContent = {
     projects: renderProjects,
-    assets:   renderAssets,
+    assets: renderAssets,
     discover: renderDiscover,
   };
 
   const tabMeta = {
-    projects: { title: "Projects",  subtitle: "Create and manage your app promo videos" },
-    assets:   { title: "Assets",    subtitle: "Upload screenshots and media assets" },
-    discover: { title: "Discover",  subtitle: "Explore templates and inspiration" },
+    projects: { title: "Projects", subtitle: "Create and manage your app promo videos" },
+    assets: { title: "Assets", subtitle: "Upload screenshots and media assets" },
+    discover: { title: "Discover", subtitle: "Explore templates and inspiration" },
   };
 
   /* ── Render ──────────────────────────────────────────────────────────── */
@@ -667,34 +692,50 @@ export function component() {
 
           /* nav */
           e.jsx("nav", {
-            style: { width: "100%", display: "flex", flexDirection: "column", gap: 4, padding: "0 6px" },
+            style: {
+              width: "100%",
+              display: "flex",
+              flexDirection: "column",
+              gap: 4,
+              padding: "0 6px",
+            },
             children: NAV_ITEMS.map(({ key, label, icon: Icon }) => {
               const active = activeTab === key;
-              return e.jsxs("button", {
-                onClick: () => setActiveTab(key),
-                title: label,
-                style: {
-                  width: "100%",
-                  height: 54,
-                  borderRadius: 12,
-                  display: "flex",
-                  flexDirection: "column",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  gap: 4,
-                  border: active ? `1.5px solid ${TOKEN.borderHover}` : "1.5px solid transparent",
-                  background: active ? TOKEN.bluePale : "transparent",
-                  color: active ? TOKEN.blue : TOKEN.textMuted,
-                  fontSize: 10,
-                  fontWeight: active ? 600 : 400,
-                  transition: "all 0.15s",
-                  cursor: "pointer",
+              return e.jsxs(
+                "button",
+                {
+                  onClick: () => setActiveTab(key),
+                  title: label,
+                  style: {
+                    width: "100%",
+                    height: 54,
+                    borderRadius: 12,
+                    display: "flex",
+                    flexDirection: "column",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    gap: 4,
+                    border: active ? `1.5px solid ${TOKEN.borderHover}` : "1.5px solid transparent",
+                    background: active ? TOKEN.bluePale : "transparent",
+                    color: active ? TOKEN.blue : TOKEN.textMuted,
+                    fontSize: 10,
+                    fontWeight: active ? 600 : 400,
+                    transition: "all 0.15s",
+                    cursor: "pointer",
+                  },
+                  children: [
+                    e.jsx(Icon, {
+                      style: {
+                        width: active ? 20 : 16,
+                        height: active ? 20 : 16,
+                        transition: "all 0.15s",
+                      },
+                    }),
+                    e.jsx("span", { children: label }),
+                  ],
                 },
-                children: [
-                  e.jsx(Icon, { style: { width: active ? 20 : 16, height: active ? 20 : 16, transition: "all 0.15s" } }),
-                  e.jsx("span", { children: label }),
-                ],
-              }, key);
+                key,
+              );
             }),
           }),
 
@@ -728,112 +769,119 @@ export function component() {
                 }),
               }),
 
-              menuOpen && e.jsxs("div", {
-                style: {
-                  position: "absolute",
-                  bottom: "calc(100% + 10px)",
-                  left: 0,
-                  width: 272,
-                  borderRadius: TOKEN.radiusLg,
-                  background: "#1a2540",
-                  color: "#f1f5f9",
-                  border: "1px solid rgba(255,255,255,0.1)",
-                  padding: 16,
-                  zIndex: 50,
-                  boxShadow: "0 20px 48px rgba(0,0,0,0.32)",
-                },
-                children: [
-                  /* profile header */
-                  e.jsxs("div", {
-                    style: {
-                      display: "flex",
-                      alignItems: "center",
-                      gap: 12,
-                      marginBottom: 14,
-                      paddingBottom: 14,
-                      borderBottom: "1px solid rgba(255,255,255,0.1)",
-                    },
-                    children: [
-                      e.jsx("img", {
-                        src: avatarSrc,
-                        alt: profile.name,
-                        style: { width: 46, height: 46, borderRadius: "50%", objectFit: "cover", flexShrink: 0 },
-                        onError: handleAvatarError,
-                      }),
-                      e.jsxs("div", {
-                        style: { minWidth: 0 },
-                        children: [
-                          e.jsx("p", {
-                            style: { fontSize: 15, fontWeight: 600, marginBottom: 2 },
-                            children: profile.name,
-                          }),
-                          e.jsx("p", {
-                            style: { fontSize: 12, color: "rgba(148,163,184,0.85)" },
-                            children: maskEmail(profile.email),
-                          }),
-                          e.jsxs("div", {
-                            style: {
-                              display: "inline-flex",
-                              alignItems: "center",
-                              gap: 5,
-                              marginTop: 6,
-                              background: "rgba(255,255,255,0.08)",
-                              borderRadius: 6,
-                              padding: "3px 8px",
-                              fontSize: 11,
-                              color: "rgba(196,210,240,0.9)",
-                            },
-                            children: [
-                              e.jsx(S, { style: { width: 13, height: 13 } }),
-                              ` ${credits} credits`,
-                            ],
-                          }),
-                        ],
-                      }),
-                    ],
-                  }),
+              menuOpen &&
+                e.jsxs("div", {
+                  style: {
+                    position: "absolute",
+                    bottom: "calc(100% + 10px)",
+                    left: 0,
+                    width: 272,
+                    borderRadius: TOKEN.radiusLg,
+                    background: "#1a2540",
+                    color: "#f1f5f9",
+                    border: "1px solid rgba(255,255,255,0.1)",
+                    padding: 16,
+                    zIndex: 50,
+                    boxShadow: "0 20px 48px rgba(0,0,0,0.32)",
+                  },
+                  children: [
+                    /* profile header */
+                    e.jsxs("div", {
+                      style: {
+                        display: "flex",
+                        alignItems: "center",
+                        gap: 12,
+                        marginBottom: 14,
+                        paddingBottom: 14,
+                        borderBottom: "1px solid rgba(255,255,255,0.1)",
+                      },
+                      children: [
+                        e.jsx("img", {
+                          src: avatarSrc,
+                          alt: profile.name,
+                          style: {
+                            width: 46,
+                            height: 46,
+                            borderRadius: "50%",
+                            objectFit: "cover",
+                            flexShrink: 0,
+                          },
+                          onError: handleAvatarError,
+                        }),
+                        e.jsxs("div", {
+                          style: { minWidth: 0 },
+                          children: [
+                            e.jsx("p", {
+                              style: { fontSize: 15, fontWeight: 600, marginBottom: 2 },
+                              children: profile.name,
+                            }),
+                            e.jsx("p", {
+                              style: { fontSize: 12, color: "rgba(148,163,184,0.85)" },
+                              children: maskEmail(profile.email),
+                            }),
+                            e.jsxs("div", {
+                              style: {
+                                display: "inline-flex",
+                                alignItems: "center",
+                                gap: 5,
+                                marginTop: 6,
+                                background: "rgba(255,255,255,0.08)",
+                                borderRadius: 6,
+                                padding: "3px 8px",
+                                fontSize: 11,
+                                color: "rgba(196,210,240,0.9)",
+                              },
+                              children: [
+                                e.jsx(S, { style: { width: 13, height: 13 } }),
+                                ` ${credits} credits`,
+                              ],
+                            }),
+                          ],
+                        }),
+                      ],
+                    }),
 
-                  /* log out */
-                  e.jsxs("button", {
-                    onClick: () => signOut(),
-                    style: {
-                      width: "100%",
-                      display: "flex",
-                      alignItems: "center",
-                      justifyContent: "center",
-                      gap: 8,
-                      padding: "9px",
-                      borderRadius: 10,
-                      fontSize: 13,
-                      fontWeight: 500,
-                      color: "#f8fafc",
-                      background: "rgba(148,163,184,0.18)",
-                      border: "none",
-                      cursor: "pointer",
-                      marginBottom: 14,
-                      transition: "background 0.12s",
-                    },
-                    children: [e.jsx(z, { style: { width: 15, height: 15 } }), "Log out"],
-                  }),
+                    /* log out */
+                    e.jsxs("button", {
+                      onClick: () => signOut(),
+                      style: {
+                        width: "100%",
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        gap: 8,
+                        padding: "9px",
+                        borderRadius: 10,
+                        fontSize: 13,
+                        fontWeight: 500,
+                        color: "#f8fafc",
+                        background: "rgba(148,163,184,0.18)",
+                        border: "none",
+                        cursor: "pointer",
+                        marginBottom: 14,
+                        transition: "background 0.12s",
+                      },
+                      children: [e.jsx(z, { style: { width: 15, height: 15 } }), "Log out"],
+                    }),
 
-                  /* divider */
-                  e.jsx("div", {
-                    style: { height: 1, background: "rgba(148,163,184,0.2)", marginBottom: 10 },
-                  }),
+                    /* divider */
+                    e.jsx("div", {
+                      style: { height: 1, background: "rgba(148,163,184,0.2)", marginBottom: 10 },
+                    }),
 
-                  /* menu items */
-                  e.jsxs("div", {
-                    style: { display: "flex", flexDirection: "column", gap: 2 },
-                    children: [
-                      e.jsx(MenuRow, { icon: n, label: "AIGC watermark settings" }),
-                      e.jsx(MenuRow, { icon: r, label: "Language", chevron: true }),
-                      e.jsx(MenuRow, { icon: m, label: "Contact us" }),
-                      e.jsx(MenuRow, { icon: v, label: "Platform terms & conditions" }),
-                      e.jsx(MenuRow, { icon: x, label: "Account management" }),
-                    ],
-                  }),
-                ],
-              }),
+                    /* menu items */
+                    e.jsxs("div", {
+                      style: { display: "flex", flexDirection: "column", gap: 2 },
+                      children: [
+                        e.jsx(MenuRow, { icon: n, label: "AIGC watermark settings" }),
+                        e.jsx(MenuRow, { icon: r, label: "Language", chevron: true }),
+                        e.jsx(MenuRow, { icon: m, label: "Contact us" }),
+                        e.jsx(MenuRow, { icon: v, label: "Platform terms & conditions" }),
+                        e.jsx(MenuRow, { icon: x, label: "Account management" }),
+                      ],
+                    }),
+                  ],
+                }),
             ],
           }),
         ],
@@ -874,57 +922,58 @@ export function component() {
               }),
 
               /* header actions — only show on projects tab */
-              activeTab === "projects" && e.jsxs("div", {
-                style: { display: "flex", alignItems: "center", gap: 10 },
-                children: [
-                  e.jsxs("div", {
-                    style: {
-                      display: "flex",
-                      alignItems: "center",
-                      gap: 6,
-                      background: TOKEN.white,
-                      border: `1.5px solid ${TOKEN.border}`,
-                      borderRadius: 10,
-                      padding: "7px 14px",
-                      fontSize: 13,
-                      color: TOKEN.textSecondary,
-                    },
-                    children: [
-                      e.jsx(S, { style: { width: 14, height: 14, color: TOKEN.blue } }),
-                      e.jsx("span", {
-                        style: { fontWeight: 700, color: TOKEN.textPrimary, marginLeft: 2 },
-                        children: credits,
-                      }),
-                      e.jsx("span", { children: " credits" }),
-                    ],
-                  }),
-                  e.jsxs("button", {
-                    onClick: handleNewProject,
-                    disabled: creating,
-                    style: {
-                      display: "flex",
-                      alignItems: "center",
-                      gap: 7,
-                      background: TOKEN.blue,
-                      color: "#fff",
-                      padding: "9px 18px",
-                      borderRadius: 10,
-                      fontSize: 13,
-                      fontWeight: 600,
-                      border: "none",
-                      cursor: creating ? "not-allowed" : "pointer",
-                      opacity: creating ? 0.7 : 1,
-                      transition: "opacity 0.15s",
-                    },
-                    children: [
-                      creating
-                        ? e.jsx(i, { size: 16, label: "Creating project" })
-                        : e.jsx(g, { className: "h-4 w-4" }),
-                      creating ? "Creating…" : "New Project",
-                    ],
-                  }),
-                ],
-              }),
+              activeTab === "projects" &&
+                e.jsxs("div", {
+                  style: { display: "flex", alignItems: "center", gap: 10 },
+                  children: [
+                    e.jsxs("div", {
+                      style: {
+                        display: "flex",
+                        alignItems: "center",
+                        gap: 6,
+                        background: TOKEN.white,
+                        border: `1.5px solid ${TOKEN.border}`,
+                        borderRadius: 10,
+                        padding: "7px 14px",
+                        fontSize: 13,
+                        color: TOKEN.textSecondary,
+                      },
+                      children: [
+                        e.jsx(S, { style: { width: 14, height: 14, color: TOKEN.blue } }),
+                        e.jsx("span", {
+                          style: { fontWeight: 700, color: TOKEN.textPrimary, marginLeft: 2 },
+                          children: credits,
+                        }),
+                        e.jsx("span", { children: " credits" }),
+                      ],
+                    }),
+                    e.jsxs("button", {
+                      onClick: handleNewProject,
+                      disabled: creating,
+                      style: {
+                        display: "flex",
+                        alignItems: "center",
+                        gap: 7,
+                        background: TOKEN.blue,
+                        color: "#fff",
+                        padding: "9px 18px",
+                        borderRadius: 10,
+                        fontSize: 13,
+                        fontWeight: 600,
+                        border: "none",
+                        cursor: creating ? "not-allowed" : "pointer",
+                        opacity: creating ? 0.7 : 1,
+                        transition: "opacity 0.15s",
+                      },
+                      children: [
+                        creating
+                          ? e.jsx(i, { size: 16, label: "Creating project" })
+                          : e.jsx(g, { className: "h-4 w-4" }),
+                        creating ? "Creating…" : "New Project",
+                      ],
+                    }),
+                  ],
+                }),
             ],
           }),
 
