@@ -102,6 +102,7 @@ const NAV_ITEMS = [
 
 const TOKEN = {
   navy: "#0f1e45",
+  primary_color: "#7c3aed",
   blue: "#1d3d8b",
   blueMid: "#2952b3",
   blueLight: "#4f72d4",
@@ -154,6 +155,36 @@ function extractProfile(user) {
   return { name, avatar, email: user?.email || "", id: user?.id || "" };
 }
 
+function withAlpha(color, alpha) {
+  if (!color) return `rgba(79, 114, 212, ${alpha})`;
+
+  const trimmed = color.trim();
+  const shortHex = /^#([\da-fA-F]{3})$/;
+  const longHex = /^#([\da-fA-F]{6})$/;
+
+  if (shortHex.test(trimmed) || longHex.test(trimmed)) {
+    const normalizedHex =
+      trimmed.length === 4
+        ? trimmed
+          .slice(1)
+          .split("")
+          .map((char) => char + char)
+          .join("")
+        : trimmed.slice(1);
+    const intVal = Number.parseInt(normalizedHex, 16);
+    const r = (intVal >> 16) & 255;
+    const g = (intVal >> 8) & 255;
+    const b = intVal & 255;
+    return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+  }
+
+  if (trimmed.startsWith("rgb(")) {
+    return trimmed.replace("rgb(", "rgba(").replace(")", `, ${alpha})`);
+  }
+
+  return color;
+}
+
 /* ─── Sub-components ─────────────────────────────────────────────────────── */
 
 /** Gradient avatar initials — used when no photo URL is available */
@@ -189,67 +220,172 @@ function InitialsAvatar({ name, size = 40 }) {
 function ProjectCard({ project, onClick }) {
   const [hovered, setHovered] = a.useState(false);
   const st = STATUS_STYLE[project.status] || STATUS_STYLE.draft;
-  const dateStr = new Date(project.created_at).toLocaleDateString("en-US", {
-    month: "short",
-    day: "numeric",
-    year: "numeric",
-  });
+  const primary = project.primary_color || TOKEN.blue;
+  const secondary = project.secondary_color || TOKEN.blueLight;
+  const projectName = project.name || "Untitled Project";
+  const logoUrl = project.logo_url || "";
+  const createdAt = project.created_at ? new Date(project.created_at) : null;
+  const dateStr =
+    createdAt && !Number.isNaN(createdAt.getTime())
+      ? createdAt.toLocaleDateString("en-US", {
+        month: "short",
+        day: "numeric",
+        year: "numeric",
+      })
+      : "Recently updated";
+  const initials = projectName
+    .split(" ")
+    .map((part) => part[0] || "")
+    .join("")
+    .slice(0, 2)
+    .toUpperCase();
 
   return e.jsxs(f, {
     to: "/projects/$projectId",
     params: { projectId: project.id },
+    onClick,
     onMouseEnter: () => setHovered(true),
     onMouseLeave: () => setHovered(false),
     style: {
       display: "block",
-      background: hovered ? "#fafbff" : TOKEN.white,
+      background: hovered ? TOKEN.blueGhost : TOKEN.white,
       borderRadius: TOKEN.radiusLg,
-      border: `1.5px solid ${hovered ? TOKEN.borderHover : TOKEN.border}`,
-      padding: "20px",
+      border: `1.5px solid ${hovered ? withAlpha(primary, 0.34) : TOKEN.border}`,
+      padding: "18px",
       textDecoration: "none",
-      transition: "all 0.18s ease",
-      transform: hovered ? "translateY(-2px)" : "none",
-      boxShadow: hovered ? "0 8px 24px rgba(29,61,139,0.08)" : "none",
+      transition: "background 0.2s ease, border-color 0.2s ease",
     },
     children: [
       e.jsxs("div", {
         style: {
-          display: "flex",
-          alignItems: "flex-start",
-          justifyContent: "space-between",
+          minHeight: 92,
+          borderRadius: 14,
           marginBottom: 14,
+          padding: "14px",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
+          background: `linear-gradient(140deg, ${primary} 0%, ${secondary} 100%)`,
+          border: `0px solid ${withAlpha(primary, 0.12)}`,
         },
         children: [
           e.jsx("div", {
             style: {
-              width: 44,
-              height: 44,
-              borderRadius: 10,
-              background: project.primary_color,
+              width: 72,
+              height: 72,
+              borderRadius: 20,
+              overflow: "hidden",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              // background: withAlpha(primary, 0.12),
+              // border: `1px solid ${withAlpha(primary, 0.12)}`,
               flexShrink: 0,
-              boxShadow: `0 4px 12px ${project.primary_color}40`,
             },
+            children: logoUrl
+              ? e.jsx("img", {
+                src: logoUrl,
+                alt: `${projectName} logo`,
+                style: {
+                  width: "100%",
+                  height: "100%",
+                  objectFit: "cover",
+                  display: "block",
+                },
+              })
+              : e.jsx("span", {
+                style: {
+                  fontSize: 28,
+                  fontWeight: 800,
+                  letterSpacing: "-0.02em",
+                  color: TOKEN.white,
+                  lineHeight: 1,
+                },
+                children: initials,
+              }),
           }),
           e.jsx("span", {
             style: {
               fontSize: 11,
-              fontWeight: 500,
-              padding: "3px 9px",
+              fontWeight: 600,
+              padding: "4px 10px",
               borderRadius: 20,
-              background: st.bg,
+              background: withAlpha(TOKEN.white, 0.88),
               color: st.color,
+              border: `1px solid ${withAlpha(TOKEN.white, 0.55)}`,
             },
             children: st.label,
           }),
         ],
       }),
       e.jsx("h3", {
-        style: { fontSize: 15, fontWeight: 600, color: TOKEN.textPrimary, marginBottom: 4 },
-        children: project.name,
+        style: { fontSize: 16, fontWeight: 700, color: TOKEN.textPrimary, marginBottom: 7, letterSpacing: "-0.01em" },
+        children: projectName,
       }),
-      e.jsx("p", {
-        style: { fontSize: 12, color: TOKEN.textMuted },
-        children: dateStr,
+      e.jsxs("div", {
+        style: {
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
+          gap: 12,
+        },
+        children: [
+          e.jsxs("div", {
+            style: {
+              display: "inline-flex",
+              alignItems: "center",
+              gap: 8,
+              fontSize: 12,
+              color: TOKEN.textSecondary,
+            },
+            children: [
+              e.jsxs("div", {
+                style: { display: "inline-flex", alignItems: "center", gap: 6 },
+                children: [
+                  e.jsx("span", {
+                    style: {
+                      width: 8,
+                      height: 8,
+                      borderRadius: "50%",
+                      background: primary,
+                    },
+                  }),
+                  e.jsx("span", {
+                    style: {
+                      width: 8,
+                      height: 8,
+                      borderRadius: "50%",
+                      background: secondary,
+                    },
+                  }),
+                ],
+              }),
+              e.jsx("span", { children: dateStr }),
+            ],
+          }),
+          e.jsxs("span", {
+            style: {
+              display: "inline-flex",
+              alignItems: "center",
+              gap: 4,
+              fontSize: 12,
+              fontWeight: 600,
+              color: hovered ? primary : TOKEN.blueMid,
+              whiteSpace: "nowrap",
+            },
+            children: [
+              "Open",
+              e.jsx(E, {
+                style: {
+                  width: 14,
+                  height: 14,
+                  transform: hovered ? "translateX(2px)" : "translateX(0)",
+                  transition: "transform 0.2s ease",
+                },
+              }),
+            ],
+          }),
+        ],
       }),
     ],
   });
@@ -729,7 +865,7 @@ export function component() {
                       display: "flex",
                       alignItems: "center",
                       gap: 7,
-                      background: TOKEN.blue,
+                      background: TOKEN.primary_color,
                       color: "#fff",
                       padding: "9px 18px",
                       borderRadius: 10,
