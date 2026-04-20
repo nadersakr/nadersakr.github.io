@@ -7,6 +7,7 @@ import { P as g } from "./plus-Dz-D31Co.js";
 import { renderProjectsTab } from "./dashboard-tabs/projects-tab.js";
 import { renderAssetsTab } from "./dashboard-tabs/assets-tab.js";
 import { renderDiscoverTab } from "./dashboard-tabs/discover-tab.js";
+import { ConfirmDialog } from "./confirm-dialog.js";
 
 /* ─── Icon definitions ────────────────────────────────────────────────────── */
 
@@ -90,6 +91,15 @@ const _uploadCloud = [
 ];
 const B = j("upload-cloud", _uploadCloud);
 
+const _trash2 = [
+  ["path", { d: "M3 6h18", key: "trash-1" }],
+  ["path", { d: "M8 6V4a1 1 0 0 1 1-1h6a1 1 0 0 1 1 1v2", key: "trash-2" }],
+  ["path", { d: "M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6", key: "trash-3" }],
+  ["path", { d: "M10 11v6", key: "trash-4" }],
+  ["path", { d: "M14 11v6", key: "trash-5" }],
+];
+const Trash2Icon = j("trash-2", _trash2);
+
 /* ─── Nav items ───────────────────────────────────────────────────────────── */
 
 const NAV_ITEMS = [
@@ -166,10 +176,10 @@ function withAlpha(color, alpha) {
     const normalizedHex =
       trimmed.length === 4
         ? trimmed
-          .slice(1)
-          .split("")
-          .map((char) => char + char)
-          .join("")
+            .slice(1)
+            .split("")
+            .map((char) => char + char)
+            .join("")
         : trimmed.slice(1);
     const intVal = Number.parseInt(normalizedHex, 16);
     const r = (intVal >> 16) & 255;
@@ -191,11 +201,11 @@ function withAlpha(color, alpha) {
 function InitialsAvatar({ name, size = 40 }) {
   const initials = name
     ? name
-      .split(" ")
-      .map((w) => w[0])
-      .join("")
-      .slice(0, 2)
-      .toUpperCase()
+        .split(" ")
+        .map((w) => w[0])
+        .join("")
+        .slice(0, 2)
+        .toUpperCase()
     : "U";
   return e.jsx("div", {
     style: {
@@ -217,9 +227,11 @@ function InitialsAvatar({ name, size = 40 }) {
 }
 
 /** Single project card with hover lift */
-function ProjectCard({ project, onClick }) {
+function ProjectCard({ project, onClick, onDelete, deleting = false }) {
   const [hovered, setHovered] = a.useState(false);
-  const st = STATUS_STYLE[project.status] || STATUS_STYLE.draft;
+  const statusKey = typeof project.status === "string" ? project.status.toLowerCase() : "";
+  const st = STATUS_STYLE[statusKey] || STATUS_STYLE.draft;
+  const canDelete = statusKey === "draft";
   const primary = project.primary_color || TOKEN.blue;
   const secondary = project.secondary_color || TOKEN.blueLight;
   const projectName = project.name || "Untitled Project";
@@ -228,10 +240,10 @@ function ProjectCard({ project, onClick }) {
   const dateStr =
     createdAt && !Number.isNaN(createdAt.getTime())
       ? createdAt.toLocaleDateString("en-US", {
-        month: "short",
-        day: "numeric",
-        year: "numeric",
-      })
+          month: "short",
+          day: "numeric",
+          year: "numeric",
+        })
       : "Recently updated";
   const initials = projectName
     .split(" ")
@@ -284,25 +296,25 @@ function ProjectCard({ project, onClick }) {
             },
             children: logoUrl
               ? e.jsx("img", {
-                src: logoUrl,
-                alt: `${projectName} logo`,
-                style: {
-                  width: "100%",
-                  height: "100%",
-                  objectFit: "cover",
-                  display: "block",
-                },
-              })
+                  src: logoUrl,
+                  alt: `${projectName} logo`,
+                  style: {
+                    width: "100%",
+                    height: "100%",
+                    objectFit: "cover",
+                    display: "block",
+                  },
+                })
               : e.jsx("span", {
-                style: {
-                  fontSize: 28,
-                  fontWeight: 800,
-                  letterSpacing: "-0.02em",
-                  color: TOKEN.white,
-                  lineHeight: 1,
-                },
-                children: initials,
-              }),
+                  style: {
+                    fontSize: 28,
+                    fontWeight: 800,
+                    letterSpacing: "-0.02em",
+                    color: TOKEN.white,
+                    lineHeight: 1,
+                  },
+                  children: initials,
+                }),
           }),
           e.jsx("span", {
             style: {
@@ -318,9 +330,63 @@ function ProjectCard({ project, onClick }) {
           }),
         ],
       }),
-      e.jsx("h3", {
-        style: { fontSize: 16, fontWeight: 700, color: TOKEN.textPrimary, marginBottom: 7, letterSpacing: "-0.01em" },
-        children: projectName,
+      e.jsxs("div", {
+        style: {
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
+          gap: 10,
+          marginBottom: 7,
+        },
+        children: [
+          e.jsx("h3", {
+            style: {
+              fontSize: 16,
+              fontWeight: 700,
+              color: TOKEN.textPrimary,
+              letterSpacing: "-0.01em",
+              margin: 0,
+              minWidth: 0,
+              overflow: "hidden",
+              textOverflow: "ellipsis",
+              whiteSpace: "nowrap",
+            },
+            children: projectName,
+          }),
+          canDelete
+            ? e.jsx("button", {
+                type: "button",
+                title: "Delete draft project",
+                "aria-label": "Delete draft project",
+                disabled: deleting,
+                onClick: (ev) => {
+                  ev.preventDefault();
+                  ev.stopPropagation();
+                  if (!deleting && onDelete) onDelete(project.id);
+                },
+                style: {
+                  width: 28,
+                  height: 28,
+                  borderRadius: 8,
+                  border: `1px solid ${withAlpha("#ef4444", 0.25)}`,
+                  background: deleting ? withAlpha("#ef4444", 0.08) : TOKEN.white,
+                  color: "#dc2626",
+                  display: "inline-flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  flexShrink: 0,
+                  cursor: deleting ? "not-allowed" : "pointer",
+                  opacity: deleting ? 0.75 : 1,
+                },
+                children: e.jsx(Trash2Icon, {
+                  style: {
+                    width: 14,
+                    height: 14,
+                  },
+                }),
+              })
+            : null,
+        ],
       }),
       e.jsxs("div", {
         style: {
@@ -363,7 +429,7 @@ function ProjectCard({ project, onClick }) {
               e.jsx("span", { children: dateStr }),
             ],
           }),
-          e.jsxs("span", {
+          e.jsxs("div", {
             style: {
               display: "inline-flex",
               alignItems: "center",
@@ -433,6 +499,8 @@ export function component() {
   const [credits, setCredits] = a.useState(0);
   const [dataLoading, setDataLoading] = a.useState(true);
   const [creating, setCreating] = a.useState(false);
+  const [deletingProjectId, setDeletingProjectId] = a.useState(null);
+  const [confirmDialog, setConfirmDialog] = a.useState(null);
   const [activeTab, setActiveTab] = a.useState("projects");
   const [assetFiles, setAssetFiles] = a.useState([]);
   const [menuOpen, setMenuOpen] = a.useState(false);
@@ -492,6 +560,61 @@ export function component() {
     if (error) console.error("Failed creating project:", error.message);
   };
 
+  const openConfirmDialog = (config) => {
+    setConfirmDialog({
+      title: config?.title || "Are you sure?",
+      description: config?.description || "",
+      confirmLabel: config?.confirmLabel || "Confirm",
+      cancelLabel: config?.cancelLabel || "Cancel",
+      tone: config?.tone || "default",
+      onConfirm: config?.onConfirm || null,
+    });
+  };
+
+  const closeConfirmDialog = () => {
+    if (deletingProjectId) return;
+    setConfirmDialog(null);
+  };
+
+  const handleConfirmDialog = async () => {
+    if (!confirmDialog?.onConfirm || deletingProjectId) return;
+    await confirmDialog.onConfirm();
+  };
+
+  const handleDeleteProject = (projectId) => {
+    if (!user || !projectId || deletingProjectId) return;
+    const target = projects.find((item) => item.id === projectId);
+    const projectLabel = target?.name || "this project";
+
+    openConfirmDialog({
+      title: "Delete draft project?",
+      description: `"${projectLabel}" will be permanently removed. This action cannot be undone.`,
+      confirmLabel: "Delete",
+      cancelLabel: "Cancel",
+      tone: "danger",
+      onConfirm: async () => {
+        setDeletingProjectId(projectId);
+        try {
+          const { error } = await c
+            .from("projects")
+            .delete()
+            .eq("id", projectId)
+            .eq("user_id", user.id);
+
+          if (error) {
+            console.error("Failed deleting project:", error.message);
+            return;
+          }
+
+          setProjects((prev) => prev.filter((item) => item.id !== projectId));
+          setConfirmDialog(null);
+        } finally {
+          setDeletingProjectId(null);
+        }
+      },
+    });
+  };
+
   const handleFileChange = (ev) => {
     setAssetFiles(Array.from(ev.target.files || []));
   };
@@ -526,7 +649,16 @@ export function component() {
         projects,
         creating,
         onNewProject: handleNewProject,
-        renderProjectCard: (proj) => e.jsx(ProjectCard, { project: proj }, proj.id),
+        renderProjectCard: (proj) =>
+          e.jsx(
+            ProjectCard,
+            {
+              project: proj,
+              onDelete: handleDeleteProject,
+              deleting: deletingProjectId === proj.id,
+            },
+            proj.id,
+          ),
         TOKEN,
       }),
     assets: () =>
@@ -681,118 +813,118 @@ export function component() {
               }),
 
               menuOpen &&
-              e.jsxs("div", {
-                style: {
-                  position: "absolute",
-                  bottom: "calc(100% + 10px)",
-                  left: 0,
-                  width: 272,
-                  borderRadius: TOKEN.radiusLg,
-                  background: "#1a2540",
-                  color: "#f1f5f9",
-                  border: "1px solid rgba(255,255,255,0.1)",
-                  padding: 16,
-                  zIndex: 50,
-                  boxShadow: "0 20px 48px rgba(0,0,0,0.32)",
-                },
-                children: [
-                  /* profile header */
-                  e.jsxs("div", {
-                    style: {
-                      display: "flex",
-                      alignItems: "center",
-                      gap: 12,
-                      marginBottom: 14,
-                      paddingBottom: 14,
-                      borderBottom: "1px solid rgba(255,255,255,0.1)",
-                    },
-                    children: [
-                      e.jsx("img", {
-                        src: avatarSrc,
-                        alt: profile.name,
-                        style: {
-                          width: 46,
-                          height: 46,
-                          borderRadius: "50%",
-                          objectFit: "cover",
-                          flexShrink: 0,
-                        },
-                        onError: handleAvatarError,
-                      }),
-                      e.jsxs("div", {
-                        style: { minWidth: 0 },
-                        children: [
-                          e.jsx("p", {
-                            style: { fontSize: 15, fontWeight: 600, marginBottom: 2 },
-                            children: profile.name,
-                          }),
-                          e.jsx("p", {
-                            style: { fontSize: 12, color: "rgba(148,163,184,0.85)" },
-                            children: maskEmail(profile.email),
-                          }),
-                          e.jsxs("div", {
-                            style: {
-                              display: "inline-flex",
-                              alignItems: "center",
-                              gap: 5,
-                              marginTop: 6,
-                              background: "rgba(255,255,255,0.08)",
-                              borderRadius: 6,
-                              padding: "3px 8px",
-                              fontSize: 11,
-                              color: "rgba(196,210,240,0.9)",
-                            },
-                            children: [
-                              e.jsx(S, { style: { width: 13, height: 13 } }),
-                              ` ${credits} credits`,
-                            ],
-                          }),
-                        ],
-                      }),
-                    ],
-                  }),
+                e.jsxs("div", {
+                  style: {
+                    position: "absolute",
+                    bottom: "calc(100% + 10px)",
+                    left: 0,
+                    width: 272,
+                    borderRadius: TOKEN.radiusLg,
+                    background: "#1a2540",
+                    color: "#f1f5f9",
+                    border: "1px solid rgba(255,255,255,0.1)",
+                    padding: 16,
+                    zIndex: 50,
+                    boxShadow: "0 20px 48px rgba(0,0,0,0.32)",
+                  },
+                  children: [
+                    /* profile header */
+                    e.jsxs("div", {
+                      style: {
+                        display: "flex",
+                        alignItems: "center",
+                        gap: 12,
+                        marginBottom: 14,
+                        paddingBottom: 14,
+                        borderBottom: "1px solid rgba(255,255,255,0.1)",
+                      },
+                      children: [
+                        e.jsx("img", {
+                          src: avatarSrc,
+                          alt: profile.name,
+                          style: {
+                            width: 46,
+                            height: 46,
+                            borderRadius: "50%",
+                            objectFit: "cover",
+                            flexShrink: 0,
+                          },
+                          onError: handleAvatarError,
+                        }),
+                        e.jsxs("div", {
+                          style: { minWidth: 0 },
+                          children: [
+                            e.jsx("p", {
+                              style: { fontSize: 15, fontWeight: 600, marginBottom: 2 },
+                              children: profile.name,
+                            }),
+                            e.jsx("p", {
+                              style: { fontSize: 12, color: "rgba(148,163,184,0.85)" },
+                              children: maskEmail(profile.email),
+                            }),
+                            e.jsxs("div", {
+                              style: {
+                                display: "inline-flex",
+                                alignItems: "center",
+                                gap: 5,
+                                marginTop: 6,
+                                background: "rgba(255,255,255,0.08)",
+                                borderRadius: 6,
+                                padding: "3px 8px",
+                                fontSize: 11,
+                                color: "rgba(196,210,240,0.9)",
+                              },
+                              children: [
+                                e.jsx(S, { style: { width: 13, height: 13 } }),
+                                ` ${credits} credits`,
+                              ],
+                            }),
+                          ],
+                        }),
+                      ],
+                    }),
 
-                  /* log out */
-                  e.jsxs("button", {
-                    onClick: () => signOut(),
-                    style: {
-                      width: "100%",
-                      display: "flex",
-                      alignItems: "center",
-                      justifyContent: "center",
-                      gap: 8,
-                      padding: "9px",
-                      borderRadius: 10,
-                      fontSize: 13,
-                      fontWeight: 500,
-                      color: "#f8fafc",
-                      background: "rgba(148,163,184,0.18)",
-                      border: "none",
-                      cursor: "pointer",
-                      marginBottom: 14,
-                      transition: "background 0.12s",
-                    },
-                    children: [e.jsx(z, { style: { width: 15, height: 15 } }), "Log out"],
-                  }),
+                    /* log out */
+                    e.jsxs("button", {
+                      onClick: () => signOut(),
+                      style: {
+                        width: "100%",
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        gap: 8,
+                        padding: "9px",
+                        borderRadius: 10,
+                        fontSize: 13,
+                        fontWeight: 500,
+                        color: "#f8fafc",
+                        background: "rgba(148,163,184,0.18)",
+                        border: "none",
+                        cursor: "pointer",
+                        marginBottom: 14,
+                        transition: "background 0.12s",
+                      },
+                      children: [e.jsx(z, { style: { width: 15, height: 15 } }), "Log out"],
+                    }),
 
-                  /* divider */
-                  e.jsx("div", {
-                    style: { height: 1, background: "rgba(148,163,184,0.2)", marginBottom: 10 },
-                  }),
+                    /* divider */
+                    e.jsx("div", {
+                      style: { height: 1, background: "rgba(148,163,184,0.2)", marginBottom: 10 },
+                    }),
 
-                  /* menu items */
-                  e.jsxs("div", {
-                    style: { display: "flex", flexDirection: "column", gap: 2 },
-                    children: [
-                      e.jsx(MenuRow, { icon: n, label: "AIGC watermark settings" }),
-                      e.jsx(MenuRow, { icon: r, label: "Language", chevron: true }),
-                      e.jsx(MenuRow, { icon: m, label: "Contact us" }),
-                      e.jsx(MenuRow, { icon: v, label: "Platform terms & conditions" }),
-                      e.jsx(MenuRow, { icon: x, label: "Account management" }),
-                    ],
-                  }),
-                ],
-              }),
+                    /* menu items */
+                    e.jsxs("div", {
+                      style: { display: "flex", flexDirection: "column", gap: 2 },
+                      children: [
+                        e.jsx(MenuRow, { icon: n, label: "AIGC watermark settings" }),
+                        e.jsx(MenuRow, { icon: r, label: "Language", chevron: true }),
+                        e.jsx(MenuRow, { icon: m, label: "Contact us" }),
+                        e.jsx(MenuRow, { icon: v, label: "Platform terms & conditions" }),
+                        e.jsx(MenuRow, { icon: x, label: "Account management" }),
+                      ],
+                    }),
+                  ],
+                }),
             ],
           }),
         ],
@@ -834,63 +966,74 @@ export function component() {
 
               /* header actions — only show on projects tab */
               activeTab === "projects" &&
-              e.jsxs("div", {
-                style: { display: "flex", alignItems: "center", gap: 10 },
-                children: [
-                  e.jsxs("div", {
-                    style: {
-                      display: "flex",
-                      alignItems: "center",
-                      gap: 6,
-                      background: TOKEN.white,
-                      border: `1.5px solid ${TOKEN.border}`,
-                      borderRadius: 10,
-                      padding: "7px 14px",
-                      fontSize: 13,
-                      color: TOKEN.textSecondary,
-                    },
-                    children: [
-                      e.jsx(S, { style: { width: 14, height: 14, color: TOKEN.blue } }),
-                      e.jsx("span", {
-                        style: { fontWeight: 700, color: TOKEN.textPrimary, marginLeft: 2 },
-                        children: credits,
-                      }),
-                      e.jsx("span", { children: " credits" }),
-                    ],
-                  }),
-                  e.jsxs("button", {
-                    onClick: handleNewProject,
-                    disabled: creating,
-                    style: {
-                      display: "flex",
-                      alignItems: "center",
-                      gap: 7,
-                      background: TOKEN.primary_color,
-                      color: "#fff",
-                      padding: "9px 18px",
-                      borderRadius: 10,
-                      fontSize: 13,
-                      fontWeight: 600,
-                      border: "none",
-                      cursor: creating ? "not-allowed" : "pointer",
-                      opacity: creating ? 0.7 : 1,
-                      transition: "opacity 0.15s",
-                    },
-                    children: [
-                      creating
-                        ? e.jsx(i, { size: 16, label: "Creating project" })
-                        : e.jsx(g, { className: "h-4 w-4" }),
-                      creating ? "Creating…" : "New Project",
-                    ],
-                  }),
-                ],
-              }),
+                e.jsxs("div", {
+                  style: { display: "flex", alignItems: "center", gap: 10 },
+                  children: [
+                    e.jsxs("div", {
+                      style: {
+                        display: "flex",
+                        alignItems: "center",
+                        gap: 6,
+                        background: TOKEN.white,
+                        border: `1.5px solid ${TOKEN.border}`,
+                        borderRadius: 10,
+                        padding: "7px 14px",
+                        fontSize: 13,
+                        color: TOKEN.textSecondary,
+                      },
+                      children: [
+                        e.jsx(S, { style: { width: 14, height: 14, color: TOKEN.blue } }),
+                        e.jsx("span", {
+                          style: { fontWeight: 700, color: TOKEN.textPrimary, marginLeft: 2 },
+                          children: credits,
+                        }),
+                        e.jsx("span", { children: " credits" }),
+                      ],
+                    }),
+                    e.jsxs("button", {
+                      onClick: handleNewProject,
+                      disabled: creating,
+                      style: {
+                        display: "flex",
+                        alignItems: "center",
+                        gap: 7,
+                        background: TOKEN.primary_color,
+                        color: "#fff",
+                        padding: "9px 18px",
+                        borderRadius: 10,
+                        fontSize: 13,
+                        fontWeight: 600,
+                        border: "none",
+                        cursor: creating ? "not-allowed" : "pointer",
+                        opacity: creating ? 0.7 : 1,
+                        transition: "opacity 0.15s",
+                      },
+                      children: [
+                        creating
+                          ? e.jsx(i, { size: 16, label: "Creating project" })
+                          : e.jsx(g, { className: "h-4 w-4" }),
+                        creating ? "Creating…" : "New Project",
+                      ],
+                    }),
+                  ],
+                }),
             ],
           }),
 
           /* tab body */
           tabContent[activeTab]?.(),
         ],
+      }),
+      e.jsx(ConfirmDialog, {
+        open: Boolean(confirmDialog),
+        title: confirmDialog?.title,
+        description: confirmDialog?.description,
+        confirmLabel: confirmDialog?.confirmLabel,
+        cancelLabel: confirmDialog?.cancelLabel,
+        tone: confirmDialog?.tone,
+        busy: Boolean(deletingProjectId),
+        onConfirm: handleConfirmDialog,
+        onCancel: closeConfirmDialog,
       }),
     ],
   });
